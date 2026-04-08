@@ -4,6 +4,7 @@ import PrivateRoute from "./components/PrivateRoute";
 import ToastContainer from "./components/ToastContainer";
 import { AuthProvider } from "./context/AuthContext";
 import { CourseProvider } from "./context/CourseContext";
+import { LmsProvider } from "./context/LmsContext";
 import { NotificationProvider } from "./context/NotificationContext";
 
 const Login = lazy(() => import("./pages/Login"));
@@ -25,11 +26,12 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 function App() {
   return (
     <NotificationProvider>
-      <AuthProvider>
-        <CourseProvider>
-          <BrowserRouter>
-            <Suspense fallback={<div className="page-loading">Loading...</div>}>
-              <Routes>
+      <LmsProvider>
+        <AuthProvider>
+          <CourseProvider>
+            <BrowserRouter>
+              <Suspense fallback={<div className="page-loading">Loading...</div>}>
+                <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -81,12 +83,13 @@ function App() {
                 />
                 <Route path="/unauthorized" element={<Unauthorized />} />
                 <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-            <ToastContainer />
-          </BrowserRouter>
-        </CourseProvider>
-      </AuthProvider>
+                </Routes>
+              </Suspense>
+              <ToastContainer />
+            </BrowserRouter>
+          </CourseProvider>
+        </AuthProvider>
+      </LmsProvider>
     </NotificationProvider>
   );
 }

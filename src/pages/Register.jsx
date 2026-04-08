@@ -1,8 +1,19 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { registerUser } from "../services/authService";
 import { useNotification } from "../context/NotificationContext";
-import { validateEmail, validateMinLength, validateRequired } from "../utils/validation";
+import {
+  ALL_FIELDS_REQUIRED,
+  REGISTER_EMAIL_MESSAGE,
+  REGISTER_PASSWORD_MESSAGE,
+  isValidEmail,
+  isValidRegistrationPassword,
+  mapRegisterApiError,
+} from "../utils/validation";
+import { registerUser } from "../services/authService";
+
+function trim(v) {
+  return String(v ?? "").trim();
+}
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -18,52 +29,64 @@ export default function Register() {
   const navigate = useNavigate();
   const { notify } = useNotification();
 
-  const validate = (next = form) => {
-    const nextErrors = {
-      username: validateRequired(next.username, "Username is required"),
-      email:
-        validateRequired(next.email, "Email is required") ||
-        validateEmail(next.email, "Enter a valid email"),
-      password:
-        validateRequired(next.password, "Password is required") ||
-        validateMinLength(next.password, 6, "Password must be at least 6 characters"),
-      role: validateRequired(next.role, "Role is required"),
-    };
+  /**
+   * @param {boolean} submit - if true, validate all fields; if false, only touched fields
+   */
+  const validate = (next = form, submit = false) => {
+    const u = trim(next.username);
+    const e = trim(next.email);
+    const p = trim(next.password);
+    const r = trim(next.role);
+
+    const nextErrors = { username: "", email: "", password: "", role: "" };
+
+    if (submit) {
+      if (!u) nextErrors.username = ALL_FIELDS_REQUIRED;
+      if (!e) nextErrors.email = ALL_FIELDS_REQUIRED;
+      else if (!isValidEmail(e)) nextErrors.email = REGISTER_EMAIL_MESSAGE;
+      if (!p) nextErrors.password = ALL_FIELDS_REQUIRED;
+      else if (!isValidRegistrationPassword(p)) nextErrors.password = REGISTER_PASSWORD_MESSAGE;
+      if (!r) nextErrors.role = ALL_FIELDS_REQUIRED;
+    } else {
+      if (touched.username) nextErrors.username = u ? "" : ALL_FIELDS_REQUIRED;
+      if (touched.email) {
+        if (!e) nextErrors.email = ALL_FIELDS_REQUIRED;
+        else if (!isValidEmail(e)) nextErrors.email = REGISTER_EMAIL_MESSAGE;
+      }
+      if (touched.password) {
+        if (!p) nextErrors.password = ALL_FIELDS_REQUIRED;
+        else if (!isValidRegistrationPassword(p)) nextErrors.password = REGISTER_PASSWORD_MESSAGE;
+      }
+      if (touched.role) nextErrors.role = r ? "" : ALL_FIELDS_REQUIRED;
+    }
+
     setErrors(nextErrors);
     return nextErrors;
   };
 
-  const isValid = Object.values(errors).every((msg) => !msg) &&
-    !validateRequired(form.username) &&
-    !validateRequired(form.email) &&
-    !validateRequired(form.password) &&
-    !validateRequired(form.role);
-
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (loading) return;
     setBackendError("");
-    const nextErrors = validate(form);
+    const nextErrors = validate(form, true);
     setTouched({ username: true, email: true, password: true, role: true });
     if (Object.values(nextErrors).some(Boolean)) return;
+
     setLoading(true);
     try {
-      console.log(form);
       const data = await registerUser(form);
-      notify(data?.message || "Registration successful. Continue to OTP verification.", "success");
+      notify(data?.message || "Registration successful. Please verify OTP.", "success");
       navigate("/verify-otp", { state: { username: form.username } });
     } catch (error) {
-      console.error("Register error:", error);
-      setBackendError(
-        error?.response?.data?.message ||
-          error?.response?.data?.error ||
-          "Registration failed"
-      );
-      notify(
-        error?.response?.data?.message ||
-          error?.response?.data?.error ||
-          "Registration failed",
-        "error"
-      );
+      const mapped = mapRegisterApiError(error);
+      if (mapped.type === "duplicate") {
+        setErrors((prev) => ({ ...prev, email: mapped.message }));
+        setTouched((prev) => ({ ...prev, email: true }));
+        notify(mapped.message, "error");
+      } else {
+        setBackendError(mapped.message);
+        notify(mapped.message, "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -71,63 +94,70 @@ export default function Register() {
 
   const onBlur = (field) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
-    validate({ ...form });
+    validate({ ...form }, false);
   };
 
   const setField = (field, value) => {
     const next = { ...form, [field]: value };
     setForm(next);
-    validate(next);
+    if (field === "email") {
+      setErrors((prev) => (prev.email === "User already exists" ? { ...prev, email: "" } : prev));
+    }
+    validate(next, false);
   };
 
   const fieldError = (field) => (touched[field] ? errors[field] : "");
+  const showInvalid = (field) => Boolean(touched[field] && errors[field]);
 
   return (
     <main className="auth-card">
       <h2>Create account</h2>
       {backendError ? (
-        <div style={{ color: "red", fontSize: 12, marginBottom: 8 }}>{backendError}</div>
+        <div style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{backendError}</div>
       ) : null}
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <input
           name="username"
           placeholder="Username"
           value={form.username}
+          className={showInvalid("username") ? "auth-input-invalid" : ""}
           onChange={(e) => setField("username", e.target.value)}
           onBlur={() => onBlur("username")}
-          required
         />
         {fieldError("username") ? (
-          <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>{fieldError("username")}</div>
+          <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{fieldError("username")}</div>
         ) : null}
         <input
           name="email"
-          type="email"
+          type="text"
+          autoComplete="email"
           placeholder="Email"
           value={form.email}
+          className={showInvalid("email") ? "auth-input-invalid" : ""}
           onChange={(e) => setField("email", e.target.value)}
           onBlur={() => onBlur("email")}
-          required
         />
         {fieldError("email") ? (
-          <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>{fieldError("email")}</div>
+          <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{fieldError("email")}</div>
         ) : null}
         <input
           name="password"
           type="password"
+          autoComplete="new-password"
           placeholder="Password"
           value={form.password}
+          className={showInvalid("password") ? "auth-input-invalid" : ""}
           onChange={(e) => setField("password", e.target.value)}
           onBlur={() => onBlur("password")}
-          required
         />
         {fieldError("password") ? (
-          <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>
+          <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>
             {fieldError("password")}
           </div>
         ) : null}
         <select
           value={form.role}
+          className={showInvalid("role") ? "auth-input-invalid" : ""}
           onChange={(e) => setField("role", e.target.value)}
           onBlur={() => onBlur("role")}
         >
@@ -137,11 +167,9 @@ export default function Register() {
           <option value="ADMIN">Admin</option>
         </select>
         {fieldError("role") ? (
-          <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>{fieldError("role")}</div>
+          <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{fieldError("role")}</div>
         ) : null}
-        <button type="submit" disabled={loading || !isValid}>
-          {loading ? "Creating..." : "Register"}
-        </button>
+        <button type="submit">{loading ? "Creating..." : "Register"}</button>
       </form>
       <p>
         Already have an account? <Link to="/login">Login</Link>

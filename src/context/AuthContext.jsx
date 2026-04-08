@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { setApiAuthHandlers } from "../services/api";
 import { fetchCurrentUser, verifyOtp } from "../services/authService";
+import { normalizeAuthUser } from "../utils/authRole";
 import { useNotification } from "./NotificationContext";
 
 const AuthContext = createContext(null);
@@ -11,7 +12,7 @@ function getStoredUser() {
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    return normalizeAuthUser(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -26,6 +27,17 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // Clear common legacy keys (safe no-ops if absent).
+    localStorage.removeItem("token");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("jwt");
+    localStorage.removeItem("user");
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("jwt");
+    sessionStorage.removeItem("user");
     setToken(null);
     setUser(null);
   }, []);
@@ -51,9 +63,12 @@ export function AuthProvider({ children }) {
       }
       try {
         const data = await fetchCurrentUser();
-        const nextUser = data.user || data;
-        setUser(nextUser);
-        localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+        const raw = data.user || data;
+        const nextUser = normalizeAuthUser(raw);
+        if (nextUser) {
+          setUser(nextUser);
+          localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+        }
       } catch {
         logout();
       } finally {
@@ -66,7 +81,7 @@ export function AuthProvider({ children }) {
   const completeOtpLogin = useCallback(async ({ username, otp }) => {
     const data = await verifyOtp({ username, otp });
     const jwt = data.token || data.jwt;
-    const currentUser = data.user || { username, role: data.role };
+    const currentUser = normalizeAuthUser(data.user || { username, role: data.role }, username);
 
     localStorage.setItem(TOKEN_KEY, jwt);
     localStorage.setItem(USER_KEY, JSON.stringify(currentUser));

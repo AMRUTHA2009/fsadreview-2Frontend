@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCourse } from "../context/CourseContext";
 import { useNotification } from "../context/NotificationContext";
-import { buildStudentAssignments, normalizeCourses } from "../utils/workspaceData";
+import { normalizeCourses } from "../utils/workspaceData";
 import { validateRequired } from "../utils/validation";
+import { useAuth } from "../context/AuthContext";
+import { useLms } from "../context/LmsContext";
+import { getStudentKey, isStudentEnrolledInCourse, submissionBelongsToStudent } from "../utils/authIdentity";
 
 export default function StudentAssignments() {
   const { courses, refreshCourses } = useCourse();
@@ -14,6 +17,8 @@ export default function StudentAssignments() {
   const [comment, setComment] = useState("");
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
+  const { user } = useAuth();
+  const lms = useLms();
 
   useEffect(() => {
     if (hasLoaded.current) return;
@@ -21,10 +26,40 @@ export default function StudentAssignments() {
     refreshCourses().catch(() => {});
   }, [refreshCourses]);
 
-  const assignments = useMemo(
-    () => buildStudentAssignments(normalizeCourses(courses)),
-    [courses]
+  const studentCourses = useMemo(
+    () =>
+      (lms.courses || []).filter(
+        (c) => c.enabled && isStudentEnrolledInCourse(c, user, lms.users || [])
+      ),
+    [lms.courses, lms.users, user]
   );
+
+  const assignments = useMemo(() => {
+    const list = [];
+    for (const course of studentCourses) {
+      for (const a of course.assignments || []) {
+        const sub = (a.submissions || []).find((s) => submissionBelongsToStudent(s, user, lms.users || []));
+        const dueDate = a.deadline ? new Date(a.deadline).toLocaleString() : "-";
+        const now = Date.now();
+        const deadlineMs = a.deadline ? new Date(a.deadline).getTime() : NaN;
+        const overdue = Number.isFinite(deadlineMs) && now > deadlineMs && (!sub || sub.status !== "Graded");
+        const status = sub?.status || (overdue ? "Overdue" : "Pending");
+        const grade = sub?.status === "Graded" ? `${sub.marks ?? "-"} | ${sub.feedback || ""}` : "-";
+        list.push({
+          id: a.id,
+          rowKey: `${course.id}:${a.id}`,
+          courseId: course.id,
+          course: course.title,
+          title: a.title,
+          dueDate,
+          status,
+          grade,
+          action: sub?.status === "Graded" ? "View" : "Submit PDF",
+        });
+      }
+    }
+    return list;
+  }, [studentCourses, user, lms.users]);
 
   useEffect(() => {
     setItems(assignments);
@@ -47,13 +82,17 @@ export default function StudentAssignments() {
     setTouched({ file: true });
     if (!activeAssignment || nextErrors.file) return;
 
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === activeAssignment.id
-          ? { ...item, status: "Submitted", grade: comment || "Waiting for review" }
-          : item
-      )
-    );
+    const studentId = getStudentKey(user, lms.users || []);
+    if (!studentId) {
+      notify("Could not resolve your student profile. Try logging in again.", "error");
+      return;
+    }
+    lms.submitAssignment({
+      courseId: activeAssignment.courseId,
+      assignmentId: activeAssignment.id,
+      studentId,
+      fileName: `${selectedFile} (${new Date().toLocaleTimeString()})`,
+    });
     notify(`Submitted ${selectedFile} for ${activeAssignment.title}.`, "success");
     setActiveAssignment(null);
     setSelectedFile("");
@@ -76,7 +115,7 @@ export default function StudentAssignments() {
           </thead>
           <tbody>
             {items.map((assignment) => (
-              <tr key={assignment.id}>
+              <tr key={assignment.rowKey || assignment.id}>
                 <td>{assignment.course}</td>
                 <td>{assignment.title}</td>
                 <td>{assignment.dueDate}</td>

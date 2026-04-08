@@ -1,13 +1,11 @@
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function PageLayout({ title, children }) {
   const { user, role, logout } = useAuth();
-  const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    window.location.replace(`${window.location.origin}/login`);
   };
 
   return (

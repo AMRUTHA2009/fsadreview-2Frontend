@@ -1,23 +1,23 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { courseService } from "../services/lmsService";
+import { useLms } from "./LmsContext";
 
 const CourseContext = createContext(null);
 
 export function CourseProvider({ children }) {
-  const [courses, setCourses] = useState([]);
+  const lms = useLms();
+  const [courses, setCourses] = useState(() => lms.courses || []);
   const [loadingCourses, setLoadingCourses] = useState(false);
 
   const refreshCourses = useCallback(async () => {
     setLoadingCourses(true);
     try {
-      const data = await courseService.list({}, { skipGlobalErrorHandler: true });
-      setCourses(Array.isArray(data) ? data : data?.content || []);
+      setCourses(lms.courses || []);
     } catch {
       setCourses([]);
     } finally {
       setLoadingCourses(false);
     }
-  }, []);
+  }, [lms.courses]);
 
   const value = useMemo(
     () => ({

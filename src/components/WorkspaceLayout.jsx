@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getDisplayName, getUserInitial } from "../utils/workspaceData";
 
@@ -12,11 +12,10 @@ export default function WorkspaceLayout({
   children,
 }) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
-    navigate("/login", { replace: true });
+    window.location.replace(`${window.location.origin}/login`);
   };
 
   return (

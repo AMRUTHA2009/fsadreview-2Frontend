@@ -1,54 +1,42 @@
 import { useEffect, useRef, useState } from "react";
 import WorkspaceLayout from "../components/WorkspaceLayout";
-import { userService } from "../services/lmsService";
-import { fallbackCourses } from "../utils/workspaceData";
+import { useLms } from "../context/LmsContext";
 
 const navItems = [{ to: "/admin", label: "Dashboard", end: true }];
 const roleSequence = ["ADMIN", "INSTRUCTOR", "CONTENT_CREATOR", "STUDENT"];
-const fallbackUsers = [
-  { id: "u1", email: "admin@lms.edu", role: "ADMIN" },
-  { id: "u2", email: "instructor@lms.edu", role: "INSTRUCTOR" },
-  { id: "u3", email: "content@lms.edu", role: "CONTENT_CREATOR" },
-  { id: "u4", email: "student@lms.edu", role: "STUDENT" },
-];
 
 export default function AdminDashboard() {
-  const [users, setUsers] = useState(fallbackUsers);
-  const [courseStates, setCourseStates] = useState([
-    { id: "course-1", title: "Introduction to Machine Learning", publishState: "published", enabled: true },
-    { id: "course-2", title: "Product Design Basics", publishState: "published", enabled: false },
-    { id: "course-3", title: "Research Methods", publishState: "draft", enabled: true },
-  ]);
+  const lms = useLms();
+  const [users, setUsers] = useState(() => lms.users || []);
   const hasLoaded = useRef(false);
 
   useEffect(() => {
     if (hasLoaded.current) return;
     hasLoaded.current = true;
-    userService
-      .list({ skipGlobalErrorHandler: true })
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setUsers(data);
-        }
-      })
-      .catch(() => {});
+    setUsers(lms.users || []);
   }, []);
 
   const cycleRole = (id) => {
-    setUsers((prev) =>
-      prev.map((user) => {
-        if (user.id !== id) return user;
-        const currentIndex = roleSequence.indexOf(user.role);
-        return { ...user, role: roleSequence[(currentIndex + 1) % roleSequence.length] };
-      })
-    );
+    const current = (lms.users || []).find((u) => u.id === id);
+    if (!current) return;
+    const currentIndex = roleSequence.indexOf(current.role);
+    const nextRole = roleSequence[(currentIndex + 1) % roleSequence.length];
+    lms.updateUserRole(id, nextRole);
+    setUsers(lms.users || []);
   };
 
   const toggleCourse = (id) => {
-    setCourseStates((prev) =>
-      prev.map((course) => (course.id === id ? { ...course, enabled: !course.enabled } : course))
-    );
+    lms.toggleCourseEnabled(id);
   };
+
+  const totalEnrollments = (lms.courses || []).reduce((sum, c) => sum + (c.students || []).length, 0);
+  const totalSubmissions = (lms.courses || []).reduce(
+    (sum, c) =>
+      sum +
+      (c.assignments || []).reduce((s2, a) => s2 + (a.submissions || []).length, 0),
+    0
+  );
+  const activeCourses = (lms.courses || []).filter((c) => c.enabled).length;
 
   return (
     <WorkspaceLayout
@@ -57,6 +45,11 @@ export default function AdminDashboard() {
       workspaceLabel="Admin Workspace"
       portalLabel="Admin Portal"
       navItems={navItems}
+      action={
+        <button type="button" className="workspace-primary-button" onClick={lms.toggleDarkMode}>
+          Toggle theme
+        </button>
+      }
     >
       <div className="workspace-stat-grid four-up">
         <article className="workspace-stat-card">
@@ -64,16 +57,16 @@ export default function AdminDashboard() {
           <strong>{users.length}</strong>
         </article>
         <article className="workspace-stat-card">
-          <span>Total courses</span>
-          <strong>{fallbackCourses.length}</strong>
+          <span>Active courses</span>
+          <strong>{activeCourses}</strong>
         </article>
         <article className="workspace-stat-card">
           <span>Total enrollments</span>
-          <strong>4</strong>
+          <strong>{totalEnrollments}</strong>
         </article>
         <article className="workspace-stat-card">
           <span>Total submissions</span>
-          <strong>4</strong>
+          <strong>{totalSubmissions}</strong>
         </article>
       </div>
 
@@ -102,14 +95,11 @@ export default function AdminDashboard() {
         <section className="workspace-panel">
           <h4>Courses (enable/disable)</h4>
           <div className="workspace-list">
-            {courseStates.map((course) => (
+            {(lms.courses || []).map((course) => (
               <div key={course.id} className="workspace-list-item">
                 <div>
                   <strong>{course.title}</strong>
                   <div className="workspace-inline-badges">
-                    <span className={`workspace-badge ${course.publishState}`}>
-                      {course.publishState}
-                    </span>
                     <span className={`workspace-badge ${course.enabled ? "published" : "disabled"}`}>
                       {course.enabled ? "Enabled" : "Disabled"}
                     </span>
@@ -127,6 +117,20 @@ export default function AdminDashboard() {
           </div>
         </section>
       </div>
+
+      <section className="workspace-panel">
+        <h4>Activity logs</h4>
+        <div className="workspace-list">
+          {(lms.activityLogs || []).slice(0, 10).map((log) => (
+            <div key={log.id} className="workspace-list-item">
+              <div>
+                <strong>{new Date(log.at).toLocaleString()}</strong>
+                <p>{log.message}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </WorkspaceLayout>
   );
 }

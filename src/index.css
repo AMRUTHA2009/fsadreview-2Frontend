@@ -89,6 +89,17 @@ select:focus {
   border-color: #7c8cff;
 }
 
+main.auth-card input.auth-input-invalid,
+main.auth-card select.auth-input-invalid {
+  border-color: #dc2626;
+}
+
+main.auth-card input.auth-input-invalid:focus,
+main.auth-card select.auth-input-invalid:focus {
+  outline: 2px solid rgba(220, 38, 38, 0.2);
+  border-color: #dc2626;
+}
+
 main.auth-card button,
 .workspace-primary-button,
 .workspace-small-button,
