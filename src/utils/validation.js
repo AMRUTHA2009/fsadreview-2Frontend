@@ -25,22 +25,26 @@ export function validateMinLength(value, length, message) {
   return minLength(value, length) ? "" : message || `Must be at least ${length} characters`;
 }
 
-/** At least 8 chars, at least one letter, at least one digit. */
+/** At least 8 chars, at least one letter, one digit, one special char. */
 export function isValidRegistrationPassword(value) {
   const s = String(value ?? "");
   if (s.length < 8) return false;
   if (!/[a-zA-Z]/.test(s)) return false;
   if (!/[0-9]/.test(s)) return false;
+  if (!/[^a-zA-Z0-9]/.test(s)) return false;
   return true;
 }
 
-export function validateRegistrationPassword(value, message = "Password must be at least 8 characters and include letters and numbers") {
+export function validateRegistrationPassword(
+  value,
+  message = "Password must be at least 8 characters and include letters, numbers, and a special character"
+) {
   return isValidRegistrationPassword(value) ? "" : message;
 }
 
 export const REGISTER_EMAIL_MESSAGE = "Please enter a valid email address";
 export const REGISTER_PASSWORD_MESSAGE =
-  "Password must be at least 8 characters and include letters and numbers";
+  "Password must be at least 8 characters and include letters, numbers, and a special character";
 export const ALL_FIELDS_REQUIRED = "All fields are required";
 
 /** Map register API failure to a stable UI message (duplicate email → User already exists). */
@@ -48,10 +52,28 @@ export function mapRegisterApiError(error) {
   const status = error?.response?.status;
   const raw = error?.response?.data?.message || error?.response?.data?.error || "";
   const msg = String(raw).toLowerCase();
-  if (status === 409 || /already|exists|duplicate|registered|taken|in use/.test(msg)) {
-    return { type: "duplicate", message: "User already exists" };
+  if (
+    /username/.test(msg) &&
+    /already|exists|duplicate|registered|taken|in use|validation failed/.test(msg)
+  ) {
+    return { type: "duplicate", field: "username", message: "Username already exists, try different username" };
   }
-  return { type: "generic", message: String(raw).trim() || "Registration failed" };
+  if (
+    /email/.test(msg) &&
+    /already|exists|duplicate|registered|taken|in use|validation failed/.test(msg)
+  ) {
+    return { type: "duplicate", field: "email", message: "Gmail already used" };
+  }
+  if (status === 409) {
+    return { type: "duplicate", field: "email", message: "Gmail already used" };
+  }
+  if (/already|exists|duplicate|registered|taken|in use/.test(msg)) {
+    return { type: "duplicate", field: "username", message: "Username already exists, try different username" };
+  }
+  if (/validation failed/.test(msg)) {
+    return { type: "duplicate", field: "username", message: "Username already exists, try different username" };
+  }
+  return { type: "generic", field: null, message: String(raw).trim() || "Registration failed" };
 }
 
 /** Map login API failure to field-level messages where possible. */

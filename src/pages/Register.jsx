@@ -10,12 +10,14 @@ import {
   mapRegisterApiError,
 } from "../utils/validation";
 import { registerUser } from "../services/authService";
+import { useLms } from "../context/LmsContext";
 
 function trim(v) {
   return String(v ?? "").trim();
 }
 
 export default function Register() {
+  const lms = useLms();
   const [form, setForm] = useState({
     username: "",
     email: "",
@@ -75,13 +77,16 @@ export default function Register() {
     setLoading(true);
     try {
       const data = await registerUser(form);
+      // Keep local LMS admin list in sync with successful backend registrations.
+      lms.registerUser(form);
       notify(data?.message || "Registration successful. Please verify OTP.", "success");
       navigate("/verify-otp", { state: { username: form.username } });
     } catch (error) {
       const mapped = mapRegisterApiError(error);
       if (mapped.type === "duplicate") {
-        setErrors((prev) => ({ ...prev, email: mapped.message }));
-        setTouched((prev) => ({ ...prev, email: true }));
+        const field = mapped.field || "username";
+        setErrors((prev) => ({ ...prev, [field]: mapped.message }));
+        setTouched((prev) => ({ ...prev, [field]: true }));
         notify(mapped.message, "error");
       } else {
         setBackendError(mapped.message);
@@ -100,8 +105,15 @@ export default function Register() {
   const setField = (field, value) => {
     const next = { ...form, [field]: value };
     setForm(next);
-    if (field === "email") {
-      setErrors((prev) => (prev.email === "User already exists" ? { ...prev, email: "" } : prev));
+    if (field === "email" || field === "username") {
+      setErrors((prev) => ({
+        ...prev,
+        username:
+          field === "username" && prev.username === "Username already exists, try different username"
+            ? ""
+            : prev.username,
+        email: field === "email" && prev.email === "Gmail already used" ? "" : prev.email,
+      }));
     }
     validate(next, false);
   };

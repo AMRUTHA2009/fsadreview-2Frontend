@@ -45,6 +45,7 @@ export default function StudentAssignments() {
         const overdue = Number.isFinite(deadlineMs) && now > deadlineMs && (!sub || sub.status !== "Graded");
         const status = sub?.status || (overdue ? "Overdue" : "Pending");
         const grade = sub?.status === "Graded" ? `${sub.marks ?? "-"} | ${sub.feedback || ""}` : "-";
+        const isSubmitted = Boolean(sub && sub.status !== "Graded");
         list.push({
           id: a.id,
           rowKey: `${course.id}:${a.id}`,
@@ -54,7 +55,8 @@ export default function StudentAssignments() {
           dueDate,
           status,
           grade,
-          action: sub?.status === "Graded" ? "View" : "Submit PDF",
+          action: sub?.status === "Graded" ? "View" : isSubmitted ? "Submitted" : "Submit PDF",
+          actionDisabled: isSubmitted,
         });
       }
     }
@@ -68,6 +70,10 @@ export default function StudentAssignments() {
   const openSubmission = (assignment) => {
     if (assignment.status === "Graded") {
       notify(`Feedback: ${assignment.grade}`, "success");
+      return;
+    }
+    if (assignment.actionDisabled) {
+      notify("Assignment already submitted.", "info");
       return;
     }
     setActiveAssignment(assignment);
@@ -138,6 +144,7 @@ export default function StudentAssignments() {
                     type="button"
                     className="workspace-small-button primary"
                     onClick={() => openSubmission(assignment)}
+                    disabled={assignment.actionDisabled}
                   >
                     {assignment.action}
                   </button>

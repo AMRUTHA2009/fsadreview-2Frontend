@@ -15,7 +15,8 @@ export default function WorkspaceLayout({
 
   const handleLogout = () => {
     logout();
-    window.location.replace(`${window.location.origin}/login`);
+    // Path-based redirect is robust across ports and hosts.
+    window.location.href = "/login";
   };
 
   return (
@@ -46,9 +47,16 @@ export default function WorkspaceLayout({
 
         <div className="workspace-sidebar-footer">
           <span>{getDisplayName(user)}</span>
-          <button type="button" className="workspace-text-button" onClick={handleLogout}>
+          <a
+            href="/login"
+            className="workspace-text-button"
+            onClick={(event) => {
+              event.preventDefault();
+              handleLogout();
+            }}
+          >
             Logout
-          </button>
+          </a>
         </div>
       </aside>
 

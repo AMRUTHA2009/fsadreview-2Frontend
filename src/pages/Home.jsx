@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 const previewCards = [
   { label: "Student", title: "My Progress", value: "12 courses | 4 in progress" },
   { label: "Instructor", title: "Grading queue", value: "18 submissions" },
-  { label: "Admin", title: "Platform health", value: "99.98% uptime this quarter" },
-  { label: "Creator", title: "Draft pipeline", value: "12 modules in review" },
+  { label: "Administrator", title: "User & Role Management", value: "24 users | 4 active roles" },
+  { label: "Content Creator", title: "Learning Materials", value: "12 modules uploaded" },
 ];
 
 export default function Home() {
@@ -36,7 +36,7 @@ export default function Home() {
             Learn Without Limits with <span>NovaLearn</span>
           </h2>
           <p>
-            A modern learning platform that connects students, instructors, admins, and creators
+            A modern learning platform that connects students, instructors, administrators, and content creators
             in one unified experience.
           </p>
           <div className="landing-cta-row">
@@ -53,7 +53,7 @@ export default function Home() {
           <div className="landing-preview-head">
             <div>
               <p>Dashboard preview</p>
-              <strong>Student | Instructor | Admin | Creator</strong>
+              <strong>Student | Instructor | Administrator | Content Creator</strong>
             </div>
             <span className="landing-status">Live analytics</span>
           </div>

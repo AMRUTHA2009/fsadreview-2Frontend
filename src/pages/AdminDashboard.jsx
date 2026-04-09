@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import WorkspaceLayout from "../components/WorkspaceLayout";
 import { useLms } from "../context/LmsContext";
+import { userService } from "../services/lmsService";
 
 const navItems = [{ to: "/admin", label: "Dashboard", end: true }];
 const roleSequence = ["ADMIN", "INSTRUCTOR", "CONTENT_CREATOR", "STUDENT"];
@@ -8,13 +9,29 @@ const roleSequence = ["ADMIN", "INSTRUCTOR", "CONTENT_CREATOR", "STUDENT"];
 export default function AdminDashboard() {
   const lms = useLms();
   const [users, setUsers] = useState(() => lms.users || []);
+  const [apiUsers, setApiUsers] = useState([]);
   const hasLoaded = useRef(false);
 
   useEffect(() => {
     if (hasLoaded.current) return;
     hasLoaded.current = true;
     setUsers(lms.users || []);
-  }, []);
+    userService
+      .list({ skipGlobalErrorHandler: true })
+      .then((data) => {
+        const list = Array.isArray(data) ? data : Array.isArray(data?.content) ? data.content : [];
+        const normalized = list.map((u, index) => ({
+          id: u.id ?? u.userId ?? `api-user-${index}`,
+          username: u.username ?? u.userName ?? u.email ?? "",
+          email: u.email ?? "",
+          role: u.role ?? "",
+        }));
+        setApiUsers(normalized);
+      })
+      .catch(() => {
+        // keep local fallback when users API is unavailable
+      });
+  }, [lms.users]);
 
   const cycleRole = (id) => {
     const current = (lms.users || []).find((u) => u.id === id);
@@ -37,6 +54,8 @@ export default function AdminDashboard() {
     0
   );
   const activeCourses = (lms.courses || []).filter((c) => c.enabled).length;
+  const localRealUsers = users.filter((u) => !String(u.email || "").toLowerCase().endsWith("@lms.edu"));
+  const displayedUsers = apiUsers.length > 0 ? apiUsers : localRealUsers.length > 0 ? localRealUsers : users;
 
   return (
     <WorkspaceLayout
@@ -74,11 +93,13 @@ export default function AdminDashboard() {
         <section className="workspace-panel">
           <h4>Users</h4>
           <div className="workspace-list">
-            {users.map((user) => (
+            {displayedUsers.map((user) => (
               <div key={user.id || user.email} className="workspace-list-item">
                 <div>
-                  <strong>{user.email}</strong>
-                  <p>{String(user.role || "").toLowerCase().replaceAll("_", " ")}</p>
+                  <strong>{user.username || user.email}</strong>
+                  <p>
+                    {user.email} | {String(user.role || "").toLowerCase().replaceAll("_", " ")}
+                  </p>
                 </div>
                 <button
                   type="button"

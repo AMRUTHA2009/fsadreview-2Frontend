@@ -23,6 +23,38 @@ function loadState() {
   }
 }
 
+function normalizeSeedUserRoles(state) {
+  if (!state || !Array.isArray(state.users)) return state;
+  const roleByEmail = {
+    "admin@lms.edu": "ADMIN",
+    "instructor@lms.edu": "INSTRUCTOR",
+    "content@lms.edu": "CONTENT_CREATOR",
+    "student@lms.edu": "STUDENT",
+  };
+  return {
+    ...state,
+    users: state.users.map((u) => {
+      const key = String(u.email || "").toLowerCase();
+      const expectedRole = roleByEmail[key];
+      return expectedRole ? { ...u, role: expectedRole } : u;
+    }),
+  };
+}
+
+function withoutHeavyPreviewData(state) {
+  return {
+    ...state,
+    courses: (state.courses || []).map((c) => ({
+      ...c,
+      materials: (c.materials || []).map((m) => ({
+        ...m,
+        previewUrl: "",
+        versionHistory: (m.versionHistory || []).map((v) => ({ ...v, previewUrl: "" })),
+      })),
+    })),
+  };
+}
+
 function seedState() {
   const users = [
     { id: "u_admin", username: "admin", email: "admin@lms.edu", password: "Admin@123", role: "ADMIN", enabled: true },
@@ -71,10 +103,26 @@ function seedState() {
 }
 
 export function LmsProvider({ children }) {
-  const [state, setState] = useState(() => loadState() || seedState());
+  const [state, setState] = useState(() => {
+    const saved = loadState();
+    return normalizeSeedUserRoles(saved || seedState());
+  });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      const name = String(error?.name || "");
+      if (name.includes("QuotaExceeded")) {
+        const slim = withoutHeavyPreviewData(state);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+          setState(slim);
+        } catch {
+          // Keep app running even if persistence fails.
+        }
+      }
+    }
   }, [state]);
 
   useEffect(() => {
@@ -268,7 +316,7 @@ export function LmsProvider({ children }) {
   );
 
   const addMaterial = useCallback(
-    ({ courseId, type, title, fileName, videoUrl }) => {
+    ({ courseId, type, title, fileName, videoUrl, previewUrl }) => {
       const id = uid("mat");
       const entry = {
         id,
@@ -277,7 +325,10 @@ export function LmsProvider({ children }) {
         title,
         fileName: fileName || "",
         videoUrl: videoUrl || "",
-        versionHistory: [{ at: nowIso(), type, title, fileName: fileName || "", videoUrl: videoUrl || "" }],
+        previewUrl: previewUrl || "",
+        versionHistory: [
+          { at: nowIso(), type, title, fileName: fileName || "", videoUrl: videoUrl || "", previewUrl: previewUrl || "" },
+        ],
       };
       setState((prev) => ({
         ...prev,
@@ -289,7 +340,7 @@ export function LmsProvider({ children }) {
   );
 
   const updateMaterial = useCallback(
-    ({ courseId, materialId, type, title, fileName, videoUrl }) => {
+    ({ courseId, materialId, type, title, fileName, videoUrl, previewUrl }) => {
       setState((prev) => ({
         ...prev,
         courses: prev.courses.map((c) => {
@@ -305,8 +356,9 @@ export function LmsProvider({ children }) {
                     title,
                     fileName: fileName || "",
                     videoUrl: videoUrl || "",
+                    previewUrl: previewUrl || "",
                     versionHistory: [
-                      { at: nowIso(), type, title, fileName: fileName || "", videoUrl: videoUrl || "" },
+                      { at: nowIso(), type, title, fileName: fileName || "", videoUrl: videoUrl || "", previewUrl: previewUrl || "" },
                       ...(m.versionHistory || []),
                     ].slice(0, 10),
                   }

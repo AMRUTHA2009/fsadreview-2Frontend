@@ -378,12 +378,24 @@ button:disabled {
   font-size: 0.94rem;
 }
 
+.workspace-sidebar-footer span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-text-button,
 .workspace-link-button {
   padding: 0;
   background: transparent;
   color: #6675f5;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-text-button {
+  flex-shrink: 0;
 }
 
 .workspace-link-button.danger {

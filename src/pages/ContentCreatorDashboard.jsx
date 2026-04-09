@@ -16,6 +16,7 @@ export default function ContentCreatorDashboard() {
   const hasLoaded = useRef(false);
   const uploadInputRef = useRef(null);
   const editInputRef = useRef(null);
+  const previewUrlRef = useRef("");
   const [targetCourseId, setTargetCourseId] = useState("");
   const [videoLink, setVideoLink] = useState("");
 
@@ -36,17 +37,21 @@ export default function ContentCreatorDashboard() {
     uploadInputRef.current?.click();
   };
 
-  const handleUploadSelected = (event) => {
+  const handleUploadSelected = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const courseId = targetCourseId || (lms.courses || [])[0]?.id;
     if (!courseId) return;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    previewUrlRef.current = previewUrl;
     lms.addMaterial({
       courseId,
       type: "PDF",
       title: file.name.replace(/\.[^.]+$/, ""),
       fileName: file.name,
+      previewUrl,
     });
     notify(`${file.name} added to materials.`, "success");
     event.target.value = "";
@@ -67,9 +72,12 @@ export default function ContentCreatorDashboard() {
     editInputRef.current?.click();
   };
 
-  const handleEditSelected = (event) => {
+  const handleEditSelected = async (event) => {
     const file = event.target.files?.[0];
     if (!file || !editingMaterial) return;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    previewUrlRef.current = previewUrl;
 
     lms.updateMaterial({
       courseId: editingMaterial.courseId,
@@ -78,16 +86,35 @@ export default function ContentCreatorDashboard() {
       title: file.name.replace(/\.[^.]+$/, ""),
       fileName: file.name,
       videoUrl: "",
+      previewUrl,
     });
     notify(`${file.name} replaced the previous file.`, "success");
     setEditingMaterial(null);
     event.target.value = "";
   };
 
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
+
   const deleteMaterial = (id) => {
     const mat = materials.find((m) => m.id === id);
     if (!mat) return;
     lms.removeMaterial({ courseId: mat.courseId, materialId: id });
+  };
+
+  const openPreview = (material) => {
+    if (material.type === "VIDEO" && material.videoUrl) {
+      window.open(material.videoUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (material.previewUrl) {
+      window.open(material.previewUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    notify("Preview unavailable for this file. Re-upload once to enable preview.", "info");
   };
 
   return (
@@ -172,11 +199,7 @@ export default function ContentCreatorDashboard() {
                 <button
                   type="button"
                   className="workspace-link-button"
-                  onClick={() => {
-                    if (material.type === "VIDEO" && material.videoUrl) {
-                      window.open(material.videoUrl, "_blank", "noopener,noreferrer");
-                    }
-                  }}
+                  onClick={() => openPreview(material)}
                 >
                   Preview
                 </button>
